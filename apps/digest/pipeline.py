@@ -11,10 +11,9 @@ def fetch_and_store_articles():
 
         for entry in feed.entries:
             try:
-                # Avoid duplicates by URL
                 if not Article.objects(url=entry.link):
                     raw_text = getattr(entry, "summary", "")
-                    summary_text = generate_summary(raw_text) if raw_text else ""
+                    summary_text = generate_summary(raw_text)
 
                     article = Article(
                         title=entry.title,
@@ -22,7 +21,7 @@ def fetch_and_store_articles():
                         source=source,
                         published_at=getattr(entry, "published", datetime.utcnow()),
                         text=raw_text,
-                        summary=summary_text,   # ✅ always save summary
+                        summary=summary_text,   # ✅ auto-saved summary
                     )
                     article.save()
                     print(f"Saved: {entry.title}")
