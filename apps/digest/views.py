@@ -4,20 +4,16 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.authentication import TokenAuthentication, SessionAuthentication
 from rest_framework.permissions import IsAuthenticated
-from .nlp import summarize_text_simple
+from .nlp import summarize_text_simple   # ✅ keep this import
 from django.utils.timezone import now
-from rest_framework import status
-from rest_framework.response import Response
-from rest_framework.decorators import api_view
 from django.contrib.auth.models import User
 from .models import Source, Article, UserFavorite, UserHistory
 from .serializers import SourceSerializer, ArticleSerializer, FavoriteSerializer, HistorySerializer
-from .pipeline import fetch_and_store_articles
+from .services.rss import fetch_and_store_articles
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.decorators import api_view, authentication_classes, permission_classes
-from rest_framework.response import Response
 
+
+# ------------------- AUTH -------------------
 @api_view(["POST"])
 def register_user(request):
     username = request.data.get("username")
@@ -30,10 +26,13 @@ def register_user(request):
     user = User.objects.create_user(username=username, email=email, password=password)
     return Response({"message": "User registered successfully", "username": user.username}, status=status.HTTP_201_CREATED)
 
+
+# ------------------- SOURCES & ARTICLES -------------------
 @api_view(["GET"])
 def list_sources(request):
     sources = Source.objects.all()
     return Response(SourceSerializer(sources, many=True).data)
+
 
 @api_view(["GET"])
 def list_articles(request):
@@ -41,7 +40,7 @@ def list_articles(request):
     Filters:
       - category=business|sports|general|...
       - tag=ai
-      - q=free text search in title/summary/text (very simple)
+      - q=free text search in title/summary/text
       - limit=20 (default 20)
     """
     category = request.GET.get("category")
@@ -55,15 +54,17 @@ def list_articles(request):
     if tag:
         qs = qs.filter(tags__icontains=tag)
     if q:
-        # Basic OR match across fields
-        qs = qs.filter(__raw__={"$or": [
-            {"title": {"$regex": q, "$options": "i"}},
-            {"summary": {"$regex": q, "$options": "i"}},
-            {"text": {"$regex": q, "$options": "i"}},
-        ]})
+        qs = qs.filter(__raw__={
+            "$or": [
+                {"title": {"$regex": q, "$options": "i"}},
+                {"summary": {"$regex": q, "$options": "i"}},
+                {"text": {"$regex": q, "$options": "i"}},
+            ]
+        })
 
     articles = qs.order_by("-published_at")[:limit]
     return Response(ArticleSerializer(articles, many=True).data)
+
 
 @api_view(["POST"])
 def fetch_articles(request):
@@ -74,9 +75,10 @@ def fetch_articles(request):
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-# ------- Minimal auth-based features -------
+
+# ------------------- FAVORITES -------------------
 @api_view(["POST"])
-@authentication_classes([JWTAuthentication])   # ✅ Use JWT, not Token/Session
+@authentication_classes([JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def add_favorite(request):
     article_id = request.data.get("article_id")
@@ -95,7 +97,7 @@ def add_favorite(request):
 
 
 @api_view(["GET"])
-@authentication_classes([JWTAuthentication])   # ✅ same here
+@authentication_classes([JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def list_favorites(request):
     favs = UserFavorite.objects(user_id=str(request.user.id))
@@ -108,7 +110,10 @@ def list_favorites(request):
         })
     return Response(payload)
 
+
+# ------------------- HISTORY -------------------
 @api_view(["POST"])
+@authentication_classes([JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def record_view(request):
     article_id = request.data.get("article_id")
@@ -119,9 +124,11 @@ def record_view(request):
         return Response({"error": "Article not found"}, status=404)
     UserHistory(user_id=str(request.user.id), article=article, viewed_at=now()).save()
     return Response({"message": "recorded"})
-    
+
+
 @api_view(["GET"])
-@permission_classes([IsAuthenticated]) 
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
 def list_history(request):
     hist = UserHistory.objects(user_id=str(request.user.id)).order_by("-viewed_at")[:100]
     payload = []
@@ -133,29 +140,32 @@ def list_history(request):
         })
     return Response(payload)
 
+
+# ------------------- SEARCH & SUMMARIZER -------------------
 @api_view(["GET"])
 def search_articles(request):
-    """Search articles by keyword in title or summary"""
-    query = request.GET.get("q", "")
-
+    query = request.GET.get("q", "").strip()
     if not query:
-        return Response({"error": "Please provide a search query (?q=keyword)"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "Missing query"}, status=400)
 
-    articles = Article.objects.filter(
-        __raw__={
-            "$or": [
-                {"title": {"$regex": query, "$options": "i"}},
-                {"summary": {"$regex": query, "$options": "i"}}
-            ]
+    articles = Article.objects.search_text(query).order_by("-published_at")[:10]
+
+    results = []
+    for article in articles:
+        data = {
+            "title": article.title,
+            "url": article.url,
+            "published_at": article.published_at,
+            # ✅ Fixed: call summarize_text_simple, not the view
+            "summary": summarize_text_simple(article.text or article.summary or article.title or ""),
         }
-    ).order_by("-published_at")[:20]
+        results.append(data)
 
-    serializer = ArticleSerializer(articles, many=True)
-    return Response(serializer.data)
+    return Response({"results": results})
 
 
 @api_view(["POST"])
-def summarize_text(request):
+def summarize_text_api(request):
     """Summarize raw text input"""
     text = request.data.get("text", "")
 

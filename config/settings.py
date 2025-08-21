@@ -46,6 +46,8 @@ INSTALLED_APPS = [
     "rest_framework.authtoken",
     "apps.digest",
     "corsheaders",
+    'django_crontab',
+    "django_extensions",
 ]
 
 MIDDLEWARE = [
@@ -165,3 +167,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
 ]
 
+CRONJOBS = [
+    # every 15 minutes run fetch_and_store_news
+    ('*/15 * * * *', 'apps.digest.cron.fetch_and_store_news')
+]

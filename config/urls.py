@@ -2,9 +2,18 @@
 from django.contrib import admin
 from django.urls import path
 from apps.digest.views import (
-    list_sources, list_articles, fetch_articles,
-    add_favorite, list_favorites, record_view, list_history,search_articles, summarize_text,register_user
+    register_user,
+    list_sources,
+    list_articles,
+    fetch_articles,
+    add_favorite,
+    list_favorites,
+    record_view,
+    list_history,
+    search_articles,
+    summarize_text_api,   # ✅ use new name
 )
+
 from rest_framework.authtoken.views import obtain_auth_token
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
@@ -30,5 +39,5 @@ urlpatterns = [
     path("api/history/record/", record_view),
 
     path("api/articles/search/", search_articles, name="search_articles"),
-    path("api/summarize/", summarize_text, name="summarize_text"),
+    path("api/summarize/", summarize_text_api, name="summarize_text"),
 ]
