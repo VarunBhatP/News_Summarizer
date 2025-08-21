@@ -1,20 +1,13 @@
 from django.core.management.base import BaseCommand
 from apps.digest.pipeline import fetch_and_store_articles
-from apps.digest.models import Article
-from apps.digest.summarizer import generate_summary
 
 class Command(BaseCommand):
-    help = "Fetch RSS articles and generate summaries"
+    help = "Fetch RSS and summarize for all sources (or a single category)."
 
-    def handle(self, *args, **kwargs):
-        self.stdout.write("🔄 Fetching articles...")
-        fetch_and_store_articles()
+    def add_arguments(self, parser):
+        parser.add_argument("--category", type=str, default=None)
 
-        self.stdout.write("✂️ Generating summaries...")
-        for a in Article.objects(summary__in=["", None]):
-            if a.text:
-                a.summary = generate_summary(a.text[:2000])
-                a.save()
-                self.stdout.write(f"✅ {a.title}")
-        
-        self.stdout.write("🎉 Done!")
+    def handle(self, *args, **options):
+        category = options.get("category")
+        fetch_and_store_articles(category)
+        self.stdout.write(self.style.SUCCESS(f"Done: {category or 'all categories'}"))
