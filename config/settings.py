@@ -43,7 +43,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     "rest_framework",
-    "rest_framework.authtoken",
     "apps.digest",
     "corsheaders",
     'django_crontab',
@@ -151,12 +150,12 @@ MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/news_digest_dev")
 connect(host=MONGO_URI, alias="default")
 
 
-RREST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": (
+REST_FRAMEWORK = {
+     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": (
-        "rest_framework.permissions.IsAuthenticated",
+        "rest_framework.permissions.IsAuthenticated",  # By default all APIs require login
     ),
 }
 
